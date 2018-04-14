@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="api_key"></string>
-    <string name="secret"></string>
+    <string name="api_key">ADD YOUR API KEY HERE</string>
+    <string name="secret">ADD YOUR SECRET KEY HERE</string>
 
 </resources>
