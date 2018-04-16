@@ -56,8 +56,8 @@ public class MainActivity extends WearableActivity {
     List<String> currentAssets = new ArrayList<>();
     List<Asset> currentAssetsAsObject = new ArrayList<>();
     Map<String, Integer> createdAsset = new HashMap<>();
-    Map<String, Double> openSellOrders = new HashMap<>();
-    Map<String, Double> openBuyOrders = new HashMap<>();
+    Map<String, Order> openSellOrders = new HashMap<>();
+    Map<String, Order> openBuyOrders = new HashMap<>();
     Map<String, Double> currentPrice = new HashMap<>();
     Map<String, String> currentChange = new HashMap<>();
     Map<String, Double> assetAmount = new HashMap<>();
@@ -148,6 +148,12 @@ public class MainActivity extends WearableActivity {
                             double amount = Double.parseDouble(assetBalance.getLocked()) + Double.parseDouble(assetBalance.getFree());
                             asset = asset + "btc";
                             assetAmount.put(asset.toUpperCase(), amount);
+                        }else {
+                            String asset = assetBalance.getAsset();
+                            double amount = Double.parseDouble(assetBalance.getLocked()) + Double.parseDouble(assetBalance.getFree());
+                            if (amount > 0){
+                                assetAmount.put(asset.toUpperCase(), amount);
+                            }
                         }
                     }
 
@@ -182,9 +188,9 @@ public class MainActivity extends WearableActivity {
                         String side = order.getSide().toString(); // SELL or BUY
                         Log.e("INFO", "open Order: " + symbol + ", " + stopPrice + ", " + side);
                         if (side.equals("SELL")){
-                            openSellOrders.put(symbol, Double.parseDouble(stopPrice));
+                            openSellOrders.put(symbol, order);
                         }else if (side.equals("BUY")) {
-                            openBuyOrders.put(symbol, Double.parseDouble(stopPrice));
+                            openBuyOrders.put(symbol, order);
                         }else {
                             //prevent crashing
                         }
@@ -228,7 +234,6 @@ public class MainActivity extends WearableActivity {
             @Override
             public void run() {
                 try {
-
                     JSONObject object = new JSONObject(txt);
                     String[] assetReturn = object.getString("stream").split("@");
                     String asset = assetReturn[0].toUpperCase();
@@ -260,7 +265,7 @@ public class MainActivity extends WearableActivity {
                             }
 
                             walletValue = walletValue + btcHolding;
-                            //btcText.setText(Double.toString(walletValue));
+                            btcText.setText(Double.toString(walletValue));
 
                             //check if we got liquidated
                             if (openBuyOrders.containsKey(asset) || openSellOrders.containsKey(asset)){
@@ -277,6 +282,11 @@ public class MainActivity extends WearableActivity {
                     }
 
                 } catch (JSONException e) {
+                    info.setText(txt + "####" + e.toString());
+                    webSocket.cancel();
+                    start();
+                    Log.e("INFO", "message wrong");
+                    //info.setText("no info");
                     e.printStackTrace();
                 }
             }
@@ -360,31 +370,50 @@ public class MainActivity extends WearableActivity {
         asset1.setPrice(price);
         asset1.setName(asset);
         asset1.setChange(change);
-        customAdapter.add(asset1,0);
-        customAdapter.notifyDataSetChanged();
+        //customAdapter.add(asset1,0);
+        //customAdapter.notifyDataSetChanged();
         createdAsset.put(asset, 1);
     }
 
     private String checkOrderBook(String asset, String price) {
         if (openSellOrders.containsKey(asset)){
-            double stopPrice = openSellOrders.get(asset);
+            double stopPrice = Double.parseDouble(openSellOrders.get(asset).getStopPrice());
             double price1 = Double.parseDouble(price);
-            if (price1 < stopPrice){
-                Log.e("INFO", "long has been liquidated");
-                String notify = asset + " long has been liquidated at " + price;
-                notifyUser("SELL", notify);
-                openSellOrders.remove(asset);
+            if (openSellOrders.get(asset).getType().name().equals("STOP_LOSS_LIMIT")){
+                if (price1 < stopPrice){
+                    Log.e("INFO", "long has been liquidated");
+                    String notify = asset + " long has been liquidated at " + price;
+                    notifyUser("SELL", notify);
+                    openSellOrders.remove(asset);
+                }
+            }else {
+                if (price1 > stopPrice){
+                    Log.e("INFO", "long has been closed");
+                    String notify = asset + " long has been closed at " + price;
+                    notifyUser("BUY", notify);
+                    openBuyOrders.remove(asset);
+                }
             }
             return "-";
         }else{
-            double stopPrice = openBuyOrders.get(asset);
+            double stopPrice = Double.parseDouble(openBuyOrders.get(asset).getStopPrice());
             double price1 = Double.parseDouble(price);
-            if (price1 > stopPrice){
-                Log.e("INFO", "short has been liquidated");
-                String notify = asset + " short has been liquidated at " + price;
-                notifyUser("BUY", notify);
-                openBuyOrders.remove(asset);
+            if (openSellOrders.get(asset).getType().name().equals("STOP_LOSS_LIMIT")){
+                if (price1 > stopPrice){
+                    Log.e("INFO", "short has been liquidated");
+                    String notify = asset + " short has been liquidated at " + price;
+                    notifyUser("BUY", notify);
+                    openBuyOrders.remove(asset);
+                }
+            }else {
+                if (price1 < stopPrice){
+                    Log.e("INFO", "short has been closed");
+                    String notify = asset + " short has been closed at " + price;
+                    notifyUser("BUY", notify);
+                    openBuyOrders.remove(asset);
+                }
             }
+
             return "+";
         }
     }
@@ -432,6 +461,7 @@ public class MainActivity extends WearableActivity {
         super.onResume();
 
         Log.e(TAG, "onResume called");
+        start();
         stopService(intent);
     }
 
