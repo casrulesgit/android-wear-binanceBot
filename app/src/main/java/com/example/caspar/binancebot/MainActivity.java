@@ -96,11 +96,11 @@ public class MainActivity extends WearableActivity {
         @Override
         public void onClosing(WebSocket webSocket, int code, String reason) {
             webSocket.close(NORMAL_CLOSURE_STATUS, null);
-            output("Closing : " + code + " / " + reason);
+            output(code + " / " + reason);
         }
         @Override
         public void onFailure(WebSocket webSocket, Throwable t, Response response) {
-            output("Error : " + t.getMessage());
+            output("err" + t.getMessage());
         }
     }
 
@@ -116,7 +116,7 @@ public class MainActivity extends WearableActivity {
         info = findViewById(R.id.info);
         btcText = findViewById(R.id.btcValue);
 
-        createAdapter();
+        //createAdapter();
 
         // Enables Always-on
         setAmbientEnabled();
@@ -126,9 +126,25 @@ public class MainActivity extends WearableActivity {
 
         BinanceApiClientFactory factory = BinanceApiClientFactory.newInstance(getString(R.string.api_key), getString(R.string.secret));
 
+
         client = factory.newAsyncRestClient();
 
 
+        client.ping(new BinanceApiCallback<Void>() {
+            @Override
+            public void onResponse(Void aVoid) {
+                startBinanceConnection();
+            }
+        });
+
+
+
+
+
+
+    }
+
+    private void startBinanceConnection() {
         client.getAccount(new BinanceApiCallback<Account>() {
             @Override
             public void onResponse(Account account) {
@@ -163,13 +179,11 @@ public class MainActivity extends WearableActivity {
             }
 
         });
-
-
     }
 
     private void createAdapter() {
         customAdapter = new CustomAdapter(currentAssetsAsObject);
-        recyclerView = findViewById(R.id.recyclerView);
+        //recyclerView = findViewById(R.id.recyclerView);
         layoutManager = new LinearLayoutManager(this);
         recyclerView.setLayoutManager(layoutManager);
         recyclerView.setAdapter(customAdapter);
@@ -233,64 +247,73 @@ public class MainActivity extends WearableActivity {
             @SuppressLint("ResourceAsColor")
             @Override
             public void run() {
-                try {
-                    JSONObject object = new JSONObject(txt);
-                    String[] assetReturn = object.getString("stream").split("@");
-                    String asset = assetReturn[0].toUpperCase();
-                    JSONObject data = object.getJSONObject("data");
-                    String type = data.getString("e");
-                    if (type.equals("24hrTicker")){
-                        String price = data.getString("a");
-                        String change = data.getString("P");
-                        if (!createdAsset.containsKey(asset)){
-                            if (asset.equals("BTCUSDT") && !createdAsset.containsKey("BTCUSDT")){
-                                newEntry(asset, price, change);
-                            }else if (createdAsset.containsKey("BTCUSDT")){
-                                newEntry(asset, price, change);
-
-                            }else {
-
-                            }
-                        }else{
-                            //update the View
-                            updateAsset(asset, price, change);
-
-                            double btcValue = calculateBTCValue(asset, price);
-
-                            assetValueinBTC.put(asset, btcValue);
-                            double walletValue = 0;
-                            for (Map.Entry<String, Double> entry : assetValueinBTC.entrySet())
-                            {
-                                walletValue = walletValue + entry.getValue();
-                            }
-
-                            walletValue = walletValue + btcHolding;
-                            btcText.setText(Double.toString(walletValue));
-
-                            //check if we got liquidated
-                            if (openBuyOrders.containsKey(asset) || openSellOrders.containsKey(asset)){
-                                checkOrderBook(asset, price);
-                            }
-
-                            //update lists
-                            currentPrice.put(asset, Double.parseDouble(price));
-                            currentChange.put(asset, change);
-
-                        }
-                    }else {
-                        checkPriceAction(asset, data);
-                    }
-
-                } catch (JSONException e) {
-                    info.setText(txt + "####" + e.toString());
-                    webSocket.cancel();
-                    start();
-                    Log.e("INFO", "message wrong");
-                    //info.setText("no info");
-                    e.printStackTrace();
+                if (!txt.substring(0, 3).equals("err")) {
+                    updateView(txt);
+                } else {
+                    info.setText("no internet connection");
                 }
             }
         });
+    }
+
+    private void updateView(String txt) {
+        try {
+
+            JSONObject object = new JSONObject(txt);
+            String[] assetReturn = object.getString("stream").split("@");
+            String asset = assetReturn[0].toUpperCase();
+            JSONObject data = object.getJSONObject("data");
+            String type = data.getString("e");
+            if (type.equals("24hrTicker")){
+                String price = data.getString("a");
+                String change = data.getString("P");
+                if (!createdAsset.containsKey(asset)){
+                    if (asset.equals("BTCUSDT") && !createdAsset.containsKey("BTCUSDT")){
+                        newEntry(asset, price, change);
+                    }else if (createdAsset.containsKey("BTCUSDT")){
+                        newEntry(asset, price, change);
+
+                    }else {
+
+                    }
+                }else{
+                    //update the View
+                    updateAsset(asset, price, change);
+
+                    double btcValue = calculateBTCValue(asset, price);
+
+                    assetValueinBTC.put(asset, btcValue);
+                    double walletValue = 0;
+                    for (Map.Entry<String, Double> entry : assetValueinBTC.entrySet())
+                    {
+                        walletValue = walletValue + entry.getValue();
+                    }
+
+                    walletValue = walletValue + btcHolding;
+                    btcText.setText(Double.toString(walletValue));
+
+                    //check if we got liquidated
+                    if (openBuyOrders.containsKey(asset) || openSellOrders.containsKey(asset)){
+                        checkOrderBook(asset, price);
+                    }
+
+                    //update lists
+                    currentPrice.put(asset, Double.parseDouble(price));
+                    currentChange.put(asset, change);
+
+                }
+            }else {
+                checkPriceAction(asset, data);
+            }
+
+        } catch (JSONException e) {
+
+            info.setText(txt + "####" + e.toString());
+            webSocket.cancel();
+            start();
+            //info.setText("no info");
+            e.printStackTrace();
+        }
     }
 
     private double calculateBTCValue(String asset, String price) {
@@ -444,8 +467,9 @@ public class MainActivity extends WearableActivity {
         Log.e(TAG, "onPause called");
 
         intent.putExtra("assets", (Serializable) currentAssets);
-        intent.putExtra("sellorders", (Serializable) openSellOrders);
-        intent.putExtra("buyorders", (Serializable) openBuyOrders);
+        //todo: for now no short long notification
+//        intent.putExtra("sellorders", (Serializable) openSellOrders);
+//        intent.putExtra("buyorders", (Serializable) openBuyOrders);
 
 
         if (webSocket != null){
@@ -461,7 +485,7 @@ public class MainActivity extends WearableActivity {
         super.onResume();
 
         Log.e(TAG, "onResume called");
-        start();
+        //start();
         stopService(intent);
     }
 

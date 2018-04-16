@@ -12,6 +12,8 @@ import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
 import android.util.Log;
 
+import com.binance.api.client.domain.account.Order;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -38,8 +40,8 @@ public class PriceService extends Service {
 
 
     private OkHttpClient client1;
-    Map<String, Double> openSellOrders = new HashMap<>();
-    Map<String, Double> openBuyOrders = new HashMap<>();
+    Map<String, Order> openSellOrders = new HashMap<>();
+    Map<String, Order> openBuyOrders = new HashMap<>();
     Map<String, Double> currentPrice = new HashMap<>();
     Map<String, String> currentChange = new HashMap<>();
     List<String> currentAssets = new ArrayList<>();
@@ -86,8 +88,8 @@ public class PriceService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
 
         currentAssets = (List<String>) intent.getSerializableExtra("assets");
-        openSellOrders = (Map<String, Double>) intent.getSerializableExtra("sellorders");
-        openBuyOrders = (Map<String, Double>) intent.getSerializableExtra("buyorders");
+        openSellOrders = (Map<String, Order>) intent.getSerializableExtra("sellorders");
+        openBuyOrders = (Map<String, Order>) intent.getSerializableExtra("buyorders");
 
         client1 = new OkHttpClient();
 
@@ -170,24 +172,43 @@ public class PriceService extends Service {
 
     private String checkOrderBook(String asset, String price) {
         if (openSellOrders.containsKey(asset)){
-            double stopPrice = openSellOrders.get(asset);
+            double stopPrice = Double.parseDouble(openSellOrders.get(asset).getStopPrice());
             double price1 = Double.parseDouble(price);
-            if (price1 < stopPrice){
-                Log.e("INFO", "long has been liquidated");
-                String notify = asset + " long has been liquidated at " + price;
-                notifyUser("SELL", notify);
-                openSellOrders.remove(asset);
+            if (openSellOrders.get(asset).getType().name().equals("STOP_LOSS_LIMIT")){
+                if (price1 < stopPrice){
+                    Log.e("INFO", "long has been liquidated");
+                    String notify = asset + " long has been liquidated at " + price;
+                    notifyUser("SELL", notify);
+                    openSellOrders.remove(asset);
+                }
+            }else {
+                if (price1 > stopPrice){
+                    Log.e("INFO", "long has been closed");
+                    String notify = asset + " long has been closed at " + price;
+                    notifyUser("BUY", notify);
+                    openBuyOrders.remove(asset);
+                }
             }
             return "-";
         }else{
-            double stopPrice = openBuyOrders.get(asset);
+            double stopPrice = Double.parseDouble(openBuyOrders.get(asset).getStopPrice());
             double price1 = Double.parseDouble(price);
-            if (price1 > stopPrice){
-                Log.e("INFO", "short has been liquidated");
-                String notify = asset + " short has been liquidated at " + price;
-                notifyUser("BUY", notify);
-                openBuyOrders.remove(asset);
+            if (openSellOrders.get(asset).getType().name().equals("STOP_LOSS_LIMIT")){
+                if (price1 > stopPrice){
+                    Log.e("INFO", "short has been liquidated");
+                    String notify = asset + " short has been liquidated at " + price;
+                    notifyUser("BUY", notify);
+                    openBuyOrders.remove(asset);
+                }
+            }else {
+                if (price1 < stopPrice){
+                    Log.e("INFO", "short has been closed");
+                    String notify = asset + " short has been closed at " + price;
+                    notifyUser("BUY", notify);
+                    openBuyOrders.remove(asset);
+                }
             }
+
             return "+";
         }
     }
