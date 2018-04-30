@@ -18,6 +18,7 @@ import android.text.Html;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -73,9 +74,10 @@ public class MainActivity extends WearableActivity {
     private LinearLayout layout;
     private TextView info;
     private TextView btcText;
+    private boolean connection = true;
 
     private int counter = 0;
-    private double klineId;
+    private ArrayList<Double> klineId;
 
     private Intent intent;
 
@@ -115,33 +117,25 @@ public class MainActivity extends WearableActivity {
         client1 = new OkHttpClient();
         info = findViewById(R.id.info);
         btcText = findViewById(R.id.btcValue);
+        klineId = new ArrayList<>();
 
         //createAdapter();
 
         // Enables Always-on
         setAmbientEnabled();
 
-        intent = new Intent(this, PriceService.class);
+        //intent = new Intent(this, PriceService.class);
 
 
+        //create Binance Client and connect to server
         BinanceApiClientFactory factory = BinanceApiClientFactory.newInstance(getString(R.string.api_key), getString(R.string.secret));
-
-
         client = factory.newAsyncRestClient();
-
-
         client.ping(new BinanceApiCallback<Void>() {
             @Override
             public void onResponse(Void aVoid) {
                 startBinanceConnection();
             }
         });
-
-
-
-
-
-
     }
 
     private void startBinanceConnection() {
@@ -158,7 +152,7 @@ public class MainActivity extends WearableActivity {
                         btcHolding = Double.parseDouble(assetBalance.getFree()) + Double.parseDouble(assetBalance.getLocked());
                     }else {
                         if (Double.parseDouble(assetBalance.getLocked()) > 0 || Double.parseDouble(assetBalance.getFree()) > 1){
-                            Log.e("info", assetBalance.toString());
+                            Log.e(TAG, assetBalance.toString());
                             String asset = assetBalance.getAsset().toLowerCase();
                             currentAssets.add(asset);
                             double amount = Double.parseDouble(assetBalance.getLocked()) + Double.parseDouble(assetBalance.getFree());
@@ -200,7 +194,7 @@ public class MainActivity extends WearableActivity {
                         String symbol = order.getSymbol();
                         String stopPrice = order.getStopPrice();
                         String side = order.getSide().toString(); // SELL or BUY
-                        Log.e("INFO", "open Order: " + symbol + ", " + stopPrice + ", " + side);
+                        Log.e(TAG, "open Order: " + symbol + ", " + stopPrice + ", " + side);
                         if (side.equals("SELL")){
                             openSellOrders.put(symbol, order);
                         }else if (side.equals("BUY")) {
@@ -209,7 +203,7 @@ public class MainActivity extends WearableActivity {
                             //prevent crashing
                         }
 
-                        Log.e("INFO", symbol);
+                        Log.e(TAG, symbol);
                         counter++;
                     }else{
                         counter++;
@@ -229,7 +223,11 @@ public class MainActivity extends WearableActivity {
     }
 
     private void start() {
-        Log.e("INFO", "websocket started");
+        if (!connection){
+            connection = true;
+            info.setText("reconnected");
+        }
+        Log.e(TAG, "websocket started");
         StringBuilder stringBuilder = new StringBuilder("wss://stream.binance.com:9443/stream?streams=");
         for (int i = 0; i < currentAssets.size(); i++){
             stringBuilder.append(currentAssets.get(i) + "btc@ticker/");
@@ -250,7 +248,19 @@ public class MainActivity extends WearableActivity {
                 if (!txt.substring(0, 3).equals("err")) {
                     updateView(txt);
                 } else {
-                    info.setText("no internet connection");
+                    connection = false;
+                    info.setText("connection lost.. trying to reconnect");
+                    start();
+//                    final Button button = findViewById(R.id.refresh);
+//                    button.setVisibility(View.VISIBLE);
+//                    button.setOnClickListener(new View.OnClickListener() {
+//                        @Override
+//                        public void onClick(View view) {
+//                            start();
+//                            button.setVisibility(View.GONE);
+//                            info.setText("nothing happening");
+//                        }
+//                    });
                 }
             }
         });
@@ -280,16 +290,15 @@ public class MainActivity extends WearableActivity {
                     //update the View
                     updateAsset(asset, price, change);
 
+                    //update btc value
                     double btcValue = calculateBTCValue(asset, price);
-
                     assetValueinBTC.put(asset, btcValue);
                     double walletValue = 0;
                     for (Map.Entry<String, Double> entry : assetValueinBTC.entrySet())
                     {
                         walletValue = walletValue + entry.getValue();
                     }
-
-                    walletValue = walletValue + btcHolding;
+                    walletValue = round(walletValue + btcHolding,5);
                     btcText.setText(Double.toString(walletValue));
 
                     //check if we got liquidated
@@ -307,15 +316,14 @@ public class MainActivity extends WearableActivity {
             }
 
         } catch (JSONException e) {
-
             info.setText(txt + "####" + e.toString());
             webSocket.cancel();
             start();
-            //info.setText("no info");
             e.printStackTrace();
         }
     }
 
+    //btc value without the dust
     private double calculateBTCValue(String asset, String price) {
 
         if (!asset.equals("BTCUSDT")){
@@ -325,8 +333,16 @@ public class MainActivity extends WearableActivity {
             return btcValue;
         }
 
-
         return 0;
+    }
+
+    public static double round(double value, int places) {
+        if (places < 0) throw new IllegalArgumentException();
+
+        long factor = (long) Math.pow(10, places);
+        value = value * factor;
+        long tmp = Math.round(value);
+        return (double) tmp / factor;
     }
 
     private void checkPriceAction(String asset, JSONObject data) {
@@ -334,7 +350,9 @@ public class MainActivity extends WearableActivity {
         try {
             JSONObject k = data.getJSONObject("k");
             String openPrice = k.getString("o");
-            if (klineId != Double.parseDouble(openPrice)){
+            //add the openPrice into a double list to prevent method begin called after the user
+            //has already been notified
+            if (!klineId.contains(Double.parseDouble(openPrice))){
                 String closePrice = k.getString("c");
 
                 double per = Double.parseDouble(closePrice) / Double.parseDouble(openPrice);
@@ -342,25 +360,44 @@ public class MainActivity extends WearableActivity {
                     //up
                     per = (per - 1) * 100;
                     if (per > 1){
-                        String content = asset + " is moving up";
-                        notifyUser("INFO", content);
-                        klineId = Double.parseDouble(openPrice);
+                        //shows percentage and price change for current asset
+                        String content = asset + " is moving up " + round(per, 2) + "% " + closePrice;
+                        notifyUser(TAG, content);
+                        klineId.add(Double.parseDouble(openPrice));
                     }
                 }else {
                     //down
                     per = (1 - per) * 100 * -1;
                     if (per < -1){
-                        String content = asset + " is moving down";
-                        notifyUser("INFO", content);
-                        klineId = Double.parseDouble(openPrice);
+                        String content = asset + " is moving down " + round(per, 2) + "% " + closePrice;
+                        notifyUser(TAG, content);
+                        klineId.add(Double.parseDouble(openPrice));
                     }
                 }
-                Log.e("INFO", asset + per);
+                Log.e(TAG, asset + per);
             }else {
-                Log.e("INFO", "user already informed. dont notify again");
+                //user is already informed about price action but it should still update
+                String closePrice = k.getString("c");
+                double per = Double.parseDouble(closePrice) / Double.parseDouble(openPrice);
+                if (per > 1){
+                    //up
+                    per = (per - 1) * 100;
+                    if (per > 1){
+                        String content = asset + " is moving up " + round(per, 2) + "%";
+                        info.setText(content);
+                        klineId.add(Double.parseDouble(openPrice));
+                    }
+                }else {
+                    //down
+                    per = (1 - per) * 100 * -1;
+                    if (per < -1){
+                        String content = asset + " is moving down " + round(per, 2) + "%";
+                        info.setText(content);
+                        klineId.add(Double.parseDouble(openPrice));
+                    }
+                }
+                Log.e(TAG, "user already informed. dont notify again");
             }
-
-
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -388,7 +425,7 @@ public class MainActivity extends WearableActivity {
     }
 
     private void newEntry(String asset, String price, String change) {
-        Log.e("INFO", "found");
+        Log.e(TAG, "found");
         Asset asset1 = new Asset();
         asset1.setPrice(price);
         asset1.setName(asset);
@@ -403,15 +440,17 @@ public class MainActivity extends WearableActivity {
             double stopPrice = Double.parseDouble(openSellOrders.get(asset).getStopPrice());
             double price1 = Double.parseDouble(price);
             if (openSellOrders.get(asset).getType().name().equals("STOP_LOSS_LIMIT")){
+                //stop loss hit
                 if (price1 < stopPrice){
-                    Log.e("INFO", "long has been liquidated");
+                    Log.e(TAG, "long has been liquidated");
                     String notify = asset + " long has been liquidated at " + price;
                     notifyUser("SELL", notify);
                     openSellOrders.remove(asset);
                 }
             }else {
+                //profit taken
                 if (price1 > stopPrice){
-                    Log.e("INFO", "long has been closed");
+                    Log.e(TAG, "long has been closed");
                     String notify = asset + " long has been closed at " + price;
                     notifyUser("BUY", notify);
                     openBuyOrders.remove(asset);
@@ -422,15 +461,17 @@ public class MainActivity extends WearableActivity {
             double stopPrice = Double.parseDouble(openBuyOrders.get(asset).getStopPrice());
             double price1 = Double.parseDouble(price);
             if (openSellOrders.get(asset).getType().name().equals("STOP_LOSS_LIMIT")){
+                //stop loss hit
                 if (price1 > stopPrice){
-                    Log.e("INFO", "short has been liquidated");
+                    Log.e(TAG, "short has been liquidated");
                     String notify = asset + " short has been liquidated at " + price;
                     notifyUser("BUY", notify);
                     openBuyOrders.remove(asset);
                 }
             }else {
+                //profit taken
                 if (price1 < stopPrice){
-                    Log.e("INFO", "short has been closed");
+                    Log.e(TAG, "short has been closed");
                     String notify = asset + " short has been closed at " + price;
                     notifyUser("BUY", notify);
                     openBuyOrders.remove(asset);
@@ -444,12 +485,10 @@ public class MainActivity extends WearableActivity {
     @RequiresApi(api = Build.VERSION_CODES.O)
     private void notifyUser(String header, String content) {
 
-
         // The channel ID of the notification.
         String id = "my_channel_01";
 
         info.setText(content);
-
 
         long[] mVibratePattern = new long[]{0, 400, 200, 400};
 
@@ -466,18 +505,18 @@ public class MainActivity extends WearableActivity {
 
         Log.e(TAG, "onPause called");
 
-        intent.putExtra("assets", (Serializable) currentAssets);
-        //todo: for now no short long notification
-//        intent.putExtra("sellorders", (Serializable) openSellOrders);
-//        intent.putExtra("buyorders", (Serializable) openBuyOrders);
-
-
-        if (webSocket != null){
-            webSocket.cancel();
-            info.setText("websocket closed");
-            Log.e("INFO", "websocket canceled");
-        }
-        startService(intent);
+//        intent.putExtra("assets", (Serializable) currentAssets);
+//        //todo: for now no short long notification
+////        intent.putExtra("sellorders", (Serializable) openSellOrders);
+////        intent.putExtra("buyorders", (Serializable) openBuyOrders);
+//
+//
+//        if (webSocket != null){
+//            webSocket.cancel();
+//            info.setText("websocket closed");
+//            Log.e(TAG, "websocket canceled");
+//        }
+//        startService(intent);
     }
 
     @Override
@@ -486,7 +525,7 @@ public class MainActivity extends WearableActivity {
 
         Log.e(TAG, "onResume called");
         //start();
-        stopService(intent);
+        //stopService(intent);
     }
 
 }

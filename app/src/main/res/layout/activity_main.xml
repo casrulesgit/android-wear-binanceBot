@@ -43,6 +43,13 @@
                     android:layout_height="wrap_content"
                     android:text="nothing happening"/>
 
+                <Button
+                    android:id="@+id/refresh"
+                    android:visibility="gone"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:text="refresh"/>
+
 
 
             </LinearLayout>

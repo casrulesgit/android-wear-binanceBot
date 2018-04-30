@@ -38,6 +38,7 @@ import static android.content.ContentValues.TAG;
 public class PriceService extends Service {
 
 
+    private static final String TAG = "SERVICE";
 
     private OkHttpClient client1;
     Map<String, Order> openSellOrders = new HashMap<>();
@@ -152,17 +153,17 @@ public class PriceService extends Service {
                 per = (per - 1) * 100;
                 if (per > 1){
                     String content = asset + " is moving up";
-                    notifyUser("INFO", content);
+                    notifyUser(TAG, content);
                 }
             }else {
                 //down
                 per = (1 - per) * 100 * -1;
                 if (per < -1){
                     String content = asset + " is moving down";
-                    notifyUser("INFO", content);
+                    notifyUser(TAG, content);
                 }
             }
-            Log.e("INFO", asset + per);
+            Log.e(TAG, asset + per);
 
         } catch (JSONException e) {
             e.printStackTrace();
@@ -176,14 +177,14 @@ public class PriceService extends Service {
             double price1 = Double.parseDouble(price);
             if (openSellOrders.get(asset).getType().name().equals("STOP_LOSS_LIMIT")){
                 if (price1 < stopPrice){
-                    Log.e("INFO", "long has been liquidated");
+                    Log.e(TAG, "long has been liquidated");
                     String notify = asset + " long has been liquidated at " + price;
                     notifyUser("SELL", notify);
                     openSellOrders.remove(asset);
                 }
             }else {
                 if (price1 > stopPrice){
-                    Log.e("INFO", "long has been closed");
+                    Log.e(TAG, "long has been closed");
                     String notify = asset + " long has been closed at " + price;
                     notifyUser("BUY", notify);
                     openBuyOrders.remove(asset);
@@ -195,14 +196,14 @@ public class PriceService extends Service {
             double price1 = Double.parseDouble(price);
             if (openSellOrders.get(asset).getType().name().equals("STOP_LOSS_LIMIT")){
                 if (price1 > stopPrice){
-                    Log.e("INFO", "short has been liquidated");
+                    Log.e(TAG, "short has been liquidated");
                     String notify = asset + " short has been liquidated at " + price;
                     notifyUser("BUY", notify);
                     openBuyOrders.remove(asset);
                 }
             }else {
                 if (price1 < stopPrice){
-                    Log.e("INFO", "short has been closed");
+                    Log.e(TAG, "short has been closed");
                     String notify = asset + " short has been closed at " + price;
                     notifyUser("BUY", notify);
                     openBuyOrders.remove(asset);
