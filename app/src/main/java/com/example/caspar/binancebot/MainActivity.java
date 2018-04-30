@@ -223,10 +223,6 @@ public class MainActivity extends WearableActivity {
     }
 
     private void start() {
-        if (!connection){
-            connection = true;
-            info.setText("reconnected");
-        }
         Log.e(TAG, "websocket started");
         StringBuilder stringBuilder = new StringBuilder("wss://stream.binance.com:9443/stream?streams=");
         for (int i = 0; i < currentAssets.size(); i++){
@@ -246,10 +242,15 @@ public class MainActivity extends WearableActivity {
             @Override
             public void run() {
                 if (!txt.substring(0, 3).equals("err")) {
+                    if (!connection){
+                        connection = true;
+                        info.setText("reconnected");
+                    }
                     updateView(txt);
                 } else {
                     connection = false;
                     info.setText("connection lost.. trying to reconnect");
+                    webSocket.cancel();
                     start();
 //                    final Button button = findViewById(R.id.refresh);
 //                    button.setVisibility(View.VISIBLE);
@@ -383,7 +384,7 @@ public class MainActivity extends WearableActivity {
                     //up
                     per = (per - 1) * 100;
                     if (per > 1){
-                        String content = asset + " is moving up " + round(per, 2) + "%";
+                        String content = asset + " is moving up " + round(per, 2) + "% " + closePrice;
                         info.setText(content);
                         klineId.add(Double.parseDouble(openPrice));
                     }
@@ -391,7 +392,7 @@ public class MainActivity extends WearableActivity {
                     //down
                     per = (1 - per) * 100 * -1;
                     if (per < -1){
-                        String content = asset + " is moving down " + round(per, 2) + "%";
+                        String content = asset + " is moving down " + round(per, 2) + "% " + closePrice;
                         info.setText(content);
                         klineId.add(Double.parseDouble(openPrice));
                     }
