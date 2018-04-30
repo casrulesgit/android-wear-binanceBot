@@ -19,6 +19,7 @@ import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -151,7 +152,9 @@ public class MainActivity extends WearableActivity {
                     if (a.equals("BTC")){
                         btcHolding = Double.parseDouble(assetBalance.getFree()) + Double.parseDouble(assetBalance.getLocked());
                     }else {
-                        if (Double.parseDouble(assetBalance.getLocked()) > 0 || Double.parseDouble(assetBalance.getFree()) > 1){
+                        //pretty tricky, because i want to hide dust.. but in this state i dont have the price of all assets
+                        //to see if they are dust or not.. workaround with assets smaller than 0.05 will be ignored
+                        if (Double.parseDouble(assetBalance.getLocked()) > 0 || Double.parseDouble(assetBalance.getFree()) > 0.05){
                             Log.e(TAG, assetBalance.toString());
                             String asset = assetBalance.getAsset().toLowerCase();
                             currentAssets.add(asset);
@@ -242,6 +245,8 @@ public class MainActivity extends WearableActivity {
             @Override
             public void run() {
                 if (!txt.substring(0, 3).equals("err")) {
+                    //if the connection was lost we need to reconnect
+                    //if we get back in here and connection is false we successfully reconnected
                     if (!connection){
                         connection = true;
                         info.setText("reconnected");
@@ -351,6 +356,7 @@ public class MainActivity extends WearableActivity {
         try {
             JSONObject k = data.getJSONObject("k");
             String openPrice = k.getString("o");
+            ImageView imageView = findViewById(R.id.imageView);
             //add the openPrice into a double list to prevent method begin called after the user
             //has already been notified
             if (!klineId.contains(Double.parseDouble(openPrice))){
@@ -363,6 +369,7 @@ public class MainActivity extends WearableActivity {
                     if (per > 1){
                         //shows percentage and price change for current asset
                         String content = asset + " is moving up " + round(per, 2) + "% " + closePrice;
+                        imageView.setBackgroundResource(R.drawable.ic_arrow_drop_up_black_24dp);
                         notifyUser(TAG, content);
                         klineId.add(Double.parseDouble(openPrice));
                     }
@@ -371,13 +378,14 @@ public class MainActivity extends WearableActivity {
                     per = (1 - per) * 100 * -1;
                     if (per < -1){
                         String content = asset + " is moving down " + round(per, 2) + "% " + closePrice;
+                        imageView.setBackgroundResource(R.drawable.ic_arrow_drop_down_black_24dp);
                         notifyUser(TAG, content);
                         klineId.add(Double.parseDouble(openPrice));
                     }
                 }
                 Log.e(TAG, asset + per);
             }else {
-                //user is already informed about price action but it should still update
+                //user is already informed about price action but it should still update until 5m candle closes
                 String closePrice = k.getString("c");
                 double per = Double.parseDouble(closePrice) / Double.parseDouble(openPrice);
                 if (per > 1){
@@ -385,6 +393,7 @@ public class MainActivity extends WearableActivity {
                     per = (per - 1) * 100;
                     if (per > 1){
                         String content = asset + " is moving up " + round(per, 2) + "% " + closePrice;
+                        imageView.setBackgroundResource(R.drawable.ic_arrow_drop_up_black_24dp);
                         info.setText(content);
                         klineId.add(Double.parseDouble(openPrice));
                     }
@@ -393,6 +402,7 @@ public class MainActivity extends WearableActivity {
                     per = (1 - per) * 100 * -1;
                     if (per < -1){
                         String content = asset + " is moving down " + round(per, 2) + "% " + closePrice;
+                        imageView.setBackgroundResource(R.drawable.ic_arrow_drop_down_black_24dp);
                         info.setText(content);
                         klineId.add(Double.parseDouble(openPrice));
                     }
