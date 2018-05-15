@@ -509,6 +509,7 @@ public class MainActivity extends WearableActivity {
                 if (price1 < stopPrice){
                     Log.e(TAG, "long has been liquidated");
                     String notify = asset + " long has been liquidated at " + price;
+                    assetText.setText(notify);
                     notifyUser(0, notify);
                     openSellOrders.remove(asset);
                 }
@@ -517,6 +518,7 @@ public class MainActivity extends WearableActivity {
                 if (price1 > stopPrice){
                     Log.e(TAG, "long has been closed");
                     String notify = asset + " long has been closed at " + price;
+                    assetText.setText(notify);
                     notifyUser(0, notify);
                     openBuyOrders.remove(asset);
                 }
