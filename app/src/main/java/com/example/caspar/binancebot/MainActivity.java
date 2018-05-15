@@ -1,24 +1,17 @@
 package com.example.caspar.binancebot;
 
 import android.annotation.SuppressLint;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Parcelable;
 import android.os.Vibrator;
 import android.support.annotation.RequiresApi;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.wearable.activity.WearableActivity;
-import android.text.Html;
 import android.util.Log;
-import android.view.Gravity;
-import android.view.View;
-import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -30,13 +23,10 @@ import com.binance.api.client.domain.account.Account;
 import com.binance.api.client.domain.account.AssetBalance;
 import com.binance.api.client.domain.account.Order;
 import com.binance.api.client.domain.account.request.OrderRequest;
-import com.binance.api.client.domain.event.ListenKey;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -64,6 +54,7 @@ public class MainActivity extends WearableActivity {
     Map<String, String> currentChange = new HashMap<>();
     Map<String, Double> assetAmount = new HashMap<>();
     Map<String, Double> assetValueinBTC = new HashMap<>();
+    Map<String, Double> startPriceAsset = new HashMap<>();
 
     private CustomAdapter customAdapter;
     private RecyclerView recyclerView;
@@ -85,6 +76,14 @@ public class MainActivity extends WearableActivity {
     private WebSocket webSocket;
 
     private double btcHolding;
+
+
+    //UI
+    private TextView assetText;
+    private TextView priceText;
+    private TextView overallText;
+    private TextView perText;
+    private TextView allText;
 
     private final class EchoWebSocketListener extends WebSocketListener {
         private static final int NORMAL_CLOSURE_STATUS = 1000;
@@ -116,9 +115,16 @@ public class MainActivity extends WearableActivity {
 
         layout = findViewById(R.id.layout);
         client1 = new OkHttpClient();
-        info = findViewById(R.id.info);
+        //info = findViewById(R.id.info);
         btcText = findViewById(R.id.btcValue);
         klineId = new ArrayList<>();
+
+
+        priceText = findViewById(R.id.price);
+        overallText = findViewById(R.id.overall);
+        perText = findViewById(R.id.per);
+        assetText = findViewById(R.id.asset);
+        //allText = findViewById(R.id.all);
 
         //createAdapter();
 
@@ -249,24 +255,14 @@ public class MainActivity extends WearableActivity {
                     //if we get back in here and connection is false we successfully reconnected
                     if (!connection){
                         connection = true;
-                        info.setText("reconnected");
+                        assetText.setText("reconnected");
                     }
                     updateView(txt);
                 } else {
                     connection = false;
-                    info.setText("connection lost.. trying to reconnect");
+                    assetText.setText("connection lost.. trying to reconnect");
                     webSocket.cancel();
                     start();
-//                    final Button button = findViewById(R.id.refresh);
-//                    button.setVisibility(View.VISIBLE);
-//                    button.setOnClickListener(new View.OnClickListener() {
-//                        @Override
-//                        public void onClick(View view) {
-//                            start();
-//                            button.setVisibility(View.GONE);
-//                            info.setText("nothing happening");
-//                        }
-//                    });
                 }
             }
         });
@@ -300,10 +296,13 @@ public class MainActivity extends WearableActivity {
                     double btcValue = calculateBTCValue(asset, price);
                     assetValueinBTC.put(asset, btcValue);
                     double walletValue = 0;
+                    //String all = "";
                     for (Map.Entry<String, Double> entry : assetValueinBTC.entrySet())
                     {
                         walletValue = walletValue + entry.getValue();
+                        //all = all + entry.getKey() + ": " + (int) calculateOverallChange(asset, Double.toString(entry.getValue()));
                     }
+                    //allText.setText(all);
                     walletValue = round(walletValue + btcHolding,5);
                     btcText.setText(Double.toString(walletValue));
 
@@ -322,11 +321,25 @@ public class MainActivity extends WearableActivity {
             }
 
         } catch (JSONException e) {
-            info.setText(txt + "####" + e.toString());
+            assetText.setText(txt + "####" + e.toString());
             webSocket.cancel();
             start();
             e.printStackTrace();
         }
+    }
+
+    //calculate the change in percentage since startUp for every asset
+    private double calculateOverallChange(String asset, String price) {
+
+        if (startPriceAsset.get(asset) != null){
+            double priceStart = startPriceAsset.get(asset);
+            double per = priceStart / Double.parseDouble(price);
+            per = (per - 1) * 100 * -1;
+            return per;
+        }else{
+            return 0;
+        }
+
     }
 
     //btc value without the dust
@@ -360,59 +373,99 @@ public class MainActivity extends WearableActivity {
             //add the openPrice into a double list to prevent method begin called after the user
             //has already been notified
             if (!klineId.contains(Double.parseDouble(openPrice))){
-                String closePrice = k.getString("c");
-
-                double per = Double.parseDouble(closePrice) / Double.parseDouble(openPrice);
-                if (per > 1){
-                    //up
-                    per = (per - 1) * 100;
-                    if (per > 1){
-                        //shows percentage and price change for current asset
-                        String content = asset + " is moving up " + round(per, 2) + "% " + closePrice;
-                        imageView.setBackgroundResource(R.drawable.ic_arrow_drop_up_black_24dp);
-                        notifyUser(TAG, content);
-                        klineId.add(Double.parseDouble(openPrice));
-                    }
-                }else {
-                    //down
-                    per = (1 - per) * 100 * -1;
-                    if (per < -1){
-                        String content = asset + " is moving down " + round(per, 2) + "% " + closePrice;
-                        imageView.setBackgroundResource(R.drawable.ic_arrow_drop_down_black_24dp);
-                        notifyUser(TAG, content);
-                        klineId.add(Double.parseDouble(openPrice));
-                    }
-                }
-                Log.e(TAG, asset + per);
+                newPriceAction(asset, k, openPrice, imageView);
             }else {
-                //user is already informed about price action but it should still update until 5m candle closes
-                String closePrice = k.getString("c");
-                double per = Double.parseDouble(closePrice) / Double.parseDouble(openPrice);
-                if (per > 1){
-                    //up
-                    per = (per - 1) * 100;
-                    if (per > 1){
-                        String content = asset + " is moving up " + round(per, 2) + "% " + closePrice;
-                        imageView.setBackgroundResource(R.drawable.ic_arrow_drop_up_black_24dp);
-                        info.setText(content);
-                        klineId.add(Double.parseDouble(openPrice));
-                    }
-                }else {
-                    //down
-                    per = (1 - per) * 100 * -1;
-                    if (per < -1){
-                        String content = asset + " is moving down " + round(per, 2) + "% " + closePrice;
-                        imageView.setBackgroundResource(R.drawable.ic_arrow_drop_down_black_24dp);
-                        info.setText(content);
-                        klineId.add(Double.parseDouble(openPrice));
-                    }
-                }
+                runningPriceAction(asset, k, openPrice, imageView);
                 Log.e(TAG, "user already informed. dont notify again");
             }
         } catch (JSONException e) {
             e.printStackTrace();
         }
 
+    }
+
+    private void runningPriceAction(String asset, JSONObject k, String openPrice, ImageView imageView) throws JSONException {
+        //user is already informed about price action but it should still update until 5m candle closes
+
+        String closePrice = k.getString("c");
+        double per = Double.parseDouble(closePrice) / Double.parseDouble(openPrice);
+        if (per > 1){
+            //up
+            per = (per - 1) * 100;
+            if (per > 1){
+                double overAll = round(calculateOverallChange(asset, closePrice),2);
+                assetText.setText(asset);
+                priceText.setText(closePrice);
+                perText.setText("" + round(per, 2) + "%");
+                overallText.setText("" + (int) overAll);
+                //String content = asset + " is moving up " + round(per, 2) + "% " + closePrice + " OA: " + overAll + "%";
+                imageView.setBackgroundResource(R.drawable.ic_arrow_drop_up_black_24dp);
+            }
+        }else {
+            //down
+            per = (1 - per) * 100 * -1;
+            if (per < -1){
+                double overAll = round(calculateOverallChange(asset, closePrice),2);
+                assetText.setText(asset);
+                priceText.setText(closePrice);
+                perText.setText("" + round(per, 2) + "%");
+                overallText.setText("" + (int) overAll);
+                //String content = asset + " is moving down " + round(per, 2) + "% " + closePrice + " OA: " + overAll + "%";
+                imageView.setBackgroundResource(R.drawable.ic_arrow_drop_down_black_24dp);
+                //info.setText(content);
+            }
+        }
+    }
+
+    private void newPriceAction(String asset, JSONObject k, String openPrice, ImageView imageView) throws JSONException {
+        String closePrice = k.getString("c");
+
+        double per = Double.parseDouble(closePrice) / Double.parseDouble(openPrice);
+        if (per > 1){
+            //up
+            per = (per - 1) * 100;
+            if (per > 1){
+                //shows percentage and price change for current asset
+                double overAll = round(calculateOverallChange(asset, closePrice),2);
+                assetText.setText(asset);
+                priceText.setText(closePrice);
+                perText.setText("" + round(per, 2) + "%");
+                overallText.setTextColor(Color.GREEN);
+                overallText.setText("" + (int) overAll);
+                imageView.setBackgroundResource(R.drawable.ic_arrow_drop_up_black_24dp);
+                notifyUser(1, "");
+                klineId.add(Double.parseDouble(openPrice));
+            } else if (per > 0.5) {
+                double overAll = round(calculateOverallChange(asset, closePrice),2);
+                assetText.setText(asset);
+                priceText.setText(closePrice);
+                perText.setText("" + round(per, 2) + "%");
+                overallText.setTextColor(Color.GREEN);
+                overallText.setText("" + (int) overAll);
+            }
+        }else {
+            //down
+            per = (1 - per) * 100 * -1;
+            if (per < -1){
+                double overAll = round(calculateOverallChange(asset, closePrice),2);
+                assetText.setText(asset);
+                priceText.setText(closePrice);
+                perText.setText("" + round(per, 2) + "%");
+                overallText.setTextColor(Color.RED);
+                overallText.setText("" + (int) overAll);
+                imageView.setBackgroundResource(R.drawable.ic_arrow_drop_down_black_24dp);
+                notifyUser(-1, "");
+                klineId.add(Double.parseDouble(openPrice));
+            } else if (per < -0.5) {
+                double overAll = round(calculateOverallChange(asset, closePrice),2);
+                assetText.setText(asset);
+                priceText.setText(closePrice);
+                perText.setText("" + round(per, 2) + "%");
+                overallText.setTextColor(Color.RED);
+                overallText.setText("" + (int) overAll);
+            }
+        }
+        Log.e(TAG, asset + per);
     }
 
     private void updateAsset(String asset, String price, String change) {
@@ -444,6 +497,7 @@ public class MainActivity extends WearableActivity {
         //customAdapter.add(asset1,0);
         //customAdapter.notifyDataSetChanged();
         createdAsset.put(asset, 1);
+        startPriceAsset.put(asset, Double.parseDouble(price));
     }
 
     private String checkOrderBook(String asset, String price) {
@@ -455,7 +509,7 @@ public class MainActivity extends WearableActivity {
                 if (price1 < stopPrice){
                     Log.e(TAG, "long has been liquidated");
                     String notify = asset + " long has been liquidated at " + price;
-                    notifyUser("SELL", notify);
+                    notifyUser(0, notify);
                     openSellOrders.remove(asset);
                 }
             }else {
@@ -463,7 +517,7 @@ public class MainActivity extends WearableActivity {
                 if (price1 > stopPrice){
                     Log.e(TAG, "long has been closed");
                     String notify = asset + " long has been closed at " + price;
-                    notifyUser("BUY", notify);
+                    notifyUser(0, notify);
                     openBuyOrders.remove(asset);
                 }
             }
@@ -476,7 +530,8 @@ public class MainActivity extends WearableActivity {
                 if (price1 > stopPrice){
                     Log.e(TAG, "short has been liquidated");
                     String notify = asset + " short has been liquidated at " + price;
-                    notifyUser("BUY", notify);
+                    assetText.setText(notify);
+                    notifyUser(0, notify);
                     openBuyOrders.remove(asset);
                 }
             }else {
@@ -484,7 +539,8 @@ public class MainActivity extends WearableActivity {
                 if (price1 < stopPrice){
                     Log.e(TAG, "short has been closed");
                     String notify = asset + " short has been closed at " + price;
-                    notifyUser("BUY", notify);
+                    assetText.setText(notify);
+                    notifyUser(0, notify);
                     openBuyOrders.remove(asset);
                 }
             }
@@ -494,14 +550,21 @@ public class MainActivity extends WearableActivity {
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
-    private void notifyUser(String header, String content) {
+    private void notifyUser(int action, String content) {
 
         // The channel ID of the notification.
         String id = "my_channel_01";
 
-        info.setText(content);
+        //info.setText(content);
 
-        long[] mVibratePattern = new long[]{0, 400, 200, 400};
+        long[] mVibratePattern;
+        if (action == 1){
+            mVibratePattern = new long[]{0, 400, 200, 400};
+        }else if (action == -1) {
+            mVibratePattern = new long[]{0, 400};
+        }else {
+            mVibratePattern = new long[]{0, 400, 200, 400, 0, 400, 200, 400};
+        }
 
 
         //vibrate manually because Channel doesn't seem to do anything

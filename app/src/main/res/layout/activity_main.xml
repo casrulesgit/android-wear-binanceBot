@@ -22,43 +22,57 @@
             android:layout_height="wrap_content"
             android:text="BTC Value"/>
 
-        <ScrollView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
 
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/overall"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:width="80px"
+                android:height="150px"
+                android:gravity="center_horizontal"
+                android:textSize="50dp"
+                android:text="0"/>
 
             <LinearLayout
                 android:id="@+id/layout"
                 android:layout_gravity="center"
-                android:gravity="center"
+                android:gravity="left"
                 android:orientation="vertical"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content">
 
                 <TextView
-                    android:id="@+id/info"
-                    android:layout_gravity="top|center"
-                    android:gravity="center"
+                    android:id="@+id/asset"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="nothing happening"/>
+                    android:text="asset"/>
 
-                <Button
-                    android:id="@+id/refresh"
-                    android:visibility="gone"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:text="refresh"/>
+                <TextView
+                    android:id="@+id/per"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="5m change"/>
+
+                <TextView
+                    android:id="@+id/price"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="price"/>
+
+
 
 
 
             </LinearLayout>
 
 
+        </LinearLayout>
 
-
-
-        </ScrollView>
 
         <ImageView
             android:id="@+id/imageView"
