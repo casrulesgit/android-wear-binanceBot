@@ -1,4 +1,4 @@
-# android-wear-binanceBot
+# Wear OS Binance App
 This is a Wear OS Application for Binance to keep you updated right from your wrist.
 
 ## Features provided for now:
