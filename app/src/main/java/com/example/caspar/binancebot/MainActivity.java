@@ -397,6 +397,11 @@ public class MainActivity extends WearableActivity {
                 assetText.setText(asset);
                 priceText.setText(closePrice);
                 perText.setText("" + round(per, 2) + "%");
+                if (overAll > 0){
+                    overallText.setTextColor(Color.GREEN);
+                }else{
+                    overallText.setTextColor(Color.RED);
+                }
                 overallText.setText("" + (int) overAll);
                 //String content = asset + " is moving up " + round(per, 2) + "% " + closePrice + " OA: " + overAll + "%";
                 imageView.setBackgroundResource(R.drawable.ic_arrow_drop_up_black_24dp);
@@ -409,6 +414,11 @@ public class MainActivity extends WearableActivity {
                 assetText.setText(asset);
                 priceText.setText(closePrice);
                 perText.setText("" + round(per, 2) + "%");
+                if (overAll > 0){
+                    overallText.setTextColor(Color.GREEN);
+                }else{
+                    overallText.setTextColor(Color.RED);
+                }
                 overallText.setText("" + (int) overAll);
                 //String content = asset + " is moving down " + round(per, 2) + "% " + closePrice + " OA: " + overAll + "%";
                 imageView.setBackgroundResource(R.drawable.ic_arrow_drop_down_black_24dp);
