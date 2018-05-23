@@ -76,6 +76,7 @@ public class MainActivity extends WearableActivity {
     private WebSocket webSocket;
 
     private double btcHolding;
+    private String btcPrice;
 
 
     //UI
@@ -292,6 +293,11 @@ public class MainActivity extends WearableActivity {
                     //update the View
                     updateAsset(asset, price, change);
 
+                    if (asset.equals("BTCUSDT")){
+                        String first = price.split("\\.")[0];
+                        btcPrice = first;
+                    }
+
                     //update btc value
                     double btcValue = calculateBTCValue(asset, price);
                     assetValueinBTC.put(asset, btcValue);
@@ -304,7 +310,7 @@ public class MainActivity extends WearableActivity {
                     }
                     //allText.setText(all);
                     walletValue = round(walletValue + btcHolding,5);
-                    btcText.setText(Double.toString(walletValue));
+                    btcText.setText(Double.toString(walletValue) + ", $:" + btcPrice);
 
                     //check if we got liquidated
                     if (openBuyOrders.containsKey(asset) || openSellOrders.containsKey(asset)){
@@ -510,54 +516,53 @@ public class MainActivity extends WearableActivity {
         startPriceAsset.put(asset, Double.parseDouble(price));
     }
 
-    private String checkOrderBook(String asset, String price) {
-        if (openSellOrders.containsKey(asset)){
-            double stopPrice = Double.parseDouble(openSellOrders.get(asset).getStopPrice());
-            double price1 = Double.parseDouble(price);
-            if (openSellOrders.get(asset).getType().name().equals("STOP_LOSS_LIMIT")){
-                //stop loss hit
-                if (price1 < stopPrice){
-                    Log.e(TAG, "long has been liquidated");
-                    String notify = asset + " long has been liquidated at " + price;
-                    assetText.setText(notify);
-                    notifyUser(0, notify);
-                    openSellOrders.remove(asset);
+    private void checkOrderBook(String asset, String price) {
+        if (openSellOrders.size() > 0){
+            if (openSellOrders.containsKey(asset)){
+                double stopPrice = Double.parseDouble(openSellOrders.get(asset).getStopPrice());
+                double price1 = Double.parseDouble(price);
+                if (openSellOrders.get(asset).getType().name().equals("STOP_LOSS_LIMIT")){
+                    //stop loss hit
+                    if (price1 < stopPrice){
+                        Log.e(TAG, "long has been liquidated");
+                        String notify = asset + " long has been liquidated at " + price;
+                        assetText.setText(notify);
+                        notifyUser(0, notify);
+                        openSellOrders.remove(asset);
+                    }
+                }else {
+                    //profit taken
+                    if (price1 > stopPrice){
+                        Log.e(TAG, "long has been closed");
+                        String notify = asset + " long has been closed at " + price;
+                        assetText.setText(notify);
+                        notifyUser(0, notify);
+                        openBuyOrders.remove(asset);
+                    }
                 }
-            }else {
-                //profit taken
-                if (price1 > stopPrice){
-                    Log.e(TAG, "long has been closed");
-                    String notify = asset + " long has been closed at " + price;
-                    assetText.setText(notify);
-                    notifyUser(0, notify);
-                    openBuyOrders.remove(asset);
+            }else{
+                double stopPrice = Double.parseDouble(openBuyOrders.get(asset).getStopPrice());
+                double price1 = Double.parseDouble(price);
+                if (openSellOrders.get(asset).getType().name().equals("STOP_LOSS_LIMIT")){
+                    //stop loss hit
+                    if (price1 > stopPrice){
+                        Log.e(TAG, "short has been liquidated");
+                        String notify = asset + " short has been liquidated at " + price;
+                        assetText.setText(notify);
+                        notifyUser(0, notify);
+                        openBuyOrders.remove(asset);
+                    }
+                }else {
+                    //profit taken
+                    if (price1 < stopPrice){
+                        Log.e(TAG, "short has been closed");
+                        String notify = asset + " short has been closed at " + price;
+                        assetText.setText(notify);
+                        notifyUser(0, notify);
+                        openBuyOrders.remove(asset);
+                    }
                 }
             }
-            return "-";
-        }else{
-            double stopPrice = Double.parseDouble(openBuyOrders.get(asset).getStopPrice());
-            double price1 = Double.parseDouble(price);
-            if (openSellOrders.get(asset).getType().name().equals("STOP_LOSS_LIMIT")){
-                //stop loss hit
-                if (price1 > stopPrice){
-                    Log.e(TAG, "short has been liquidated");
-                    String notify = asset + " short has been liquidated at " + price;
-                    assetText.setText(notify);
-                    notifyUser(0, notify);
-                    openBuyOrders.remove(asset);
-                }
-            }else {
-                //profit taken
-                if (price1 < stopPrice){
-                    Log.e(TAG, "short has been closed");
-                    String notify = asset + " short has been closed at " + price;
-                    assetText.setText(notify);
-                    notifyUser(0, notify);
-                    openBuyOrders.remove(asset);
-                }
-            }
-
-            return "+";
         }
     }
 
